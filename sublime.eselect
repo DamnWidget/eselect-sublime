@@ -1,0 +1,112 @@
+# -*- eselect -*- vim: ft=eselect
+# Copyright 2005-2013 Gentoo Foundation
+# Distributed under the terms of the GNU GPL version 2 or later
+
+DESCRIPTION="Manage the version of Sublime Text linked to /usr/bin/subl"
+MAINTAINER="damnwidget@gmail.com"
+VERSION="1.0"
+
+### get the current version ###
+get_current_version() {
+	local ret
+
+	if [[ -L "${EROOT}"/usr/bin/subl && -e "${EROOT}"/usr/bin/subl ]]
+	then
+		echo dirname $(readlink /usr/bin/subl) | cut -d '/' -f 3
+	else
+		echo ""
+	fi
+}
+
+### find all installed versions of Sublime Text ###
+get_versions() {
+	local file
+
+	for file in \
+			"${EROOT}"/opt/sublime_text_2 \
+			"${EROOT}"/opt/sublime_text_3 \
+		; do
+		if [[ -d "${file}" ]]; then
+			echo $(basename "${file}")
+		fi
+	done
+}
+
+### show actions ###
+describe_show() {
+	echo "Print the current version of Sublime Text Editor"
+}
+
+do_show() {
+	local current=$(get_current_version)
+
+	if [[ -n ${current} ]] ; then
+		echo ${current}
+		return 0
+	else
+		echo "(none)"
+		return 2
+	fi
+}
+
+### list actions ###
+describe_list() {
+	echo "List the available Sublime Text instalations"
+}
+
+do_list() {
+	local targets=( $(get_versions) )
+	local i
+
+	write_list_start "Available Sublime Text Editors:"
+	for (( i = 0; i < ${#targets[@]}; i++ )); do
+		[[ ${targets[i]} = $(get_current_version) ]] \
+			&& targets[i]=$(highlight_marker "${targets[i]}")
+	done
+	write_numbered_list -m "(none found)" "${targets[@]}"
+}
+
+### set actions ###
+describe_set() {
+	echo "Select the Sublime Text Editor version"
+}
+
+describe_set_parameters() {
+	echo "<target>"
+}
+
+describe_set_options() {
+	echo "<target> : The version to use"
+	echo "--use-old : If an implementation is already set, use that one instead"
+}
+
+do_set() {
+	local use_old=0
+	local current=$(get_current_version)
+
+	[[ -z $1 ]] && die -q "You didn't tell me what Sublime Text activate"
+	if [[ $# -eq 2 ]] && [[ $2 == "--use-old" ]]; then
+		use_old=1
+	else
+		[[ $# -gt 1 ]] && die -q "Too many parameters"
+	fi
+
+	# if --use-old and a Sublime Text is already set, don't do anything
+	if [[ -h ${EROOT}/usr/bin/subl ]] && (( $use_old )); then
+		echo "Sublime Text Editor set to ${current}"
+		return
+	fi
+
+	local target=$1
+	if is_number "${target}" ; then
+		local targets=( $(get_versions) )
+		target=${targets[target-1]}
+	fi
+	
+	[[ -z ${target} ||  ! -d ${EROOT}/opt/${target} ]] \
+		&& die -q "Target \"$1\" doesn't appear to be valid!"
+
+	rm "${EROOT}"/usr/bin/subl
+	ln -s "/opt/${target}/sublime_text" "${EROOT}/usr/bin/subl"
+	echo "Switched to ${target}"
+}
